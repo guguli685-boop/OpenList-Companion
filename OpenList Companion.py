@@ -22,7 +22,6 @@ CONFIG_FILE = ".openlist_path"
 GEOMETRY_FILE = ".openlist_geo"
 DEFAULT_PORT = 5244
 BILIBILI_UID = "3493268808620216"
-BILIBILI_SPACE_URL = "https://b23.tv/O23eqKi"
 GITHUB_URL = "https://github.com/guguli685-boop/OpenList-Companion/tree/main"
 HELP_DOC_URL = "https://gemini.google.com/app/6a8d06b29e498881"
 AUTHOR_DISPLAY_NAME = "余宣灵."
@@ -32,6 +31,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ICON_APP = os.path.join(BASE_DIR, "openlist.png")
 ICON_RUNNING = os.path.join(BASE_DIR, "正在运行图标-01.png")
 ICON_STOPPED = os.path.join(BASE_DIR, "停止运行图标-01.png")
+
+def hide_file(path):
+    try:
+        if os.path.exists(path):
+            ctypes.windll.kernel32.SetFileAttributesW(path, 2)
+    except: pass
 
 class AvatarDownloader(QThread):
     finished = pyqtSignal(QPixmap)
@@ -49,6 +54,7 @@ class AvatarDownloader(QThread):
 class OpenListManager(QWidget):
     def __init__(self):
         super().__init__()
+        self.setAttribute(Qt.WA_StaticContents) # 丝滑拉伸属性
         self.app_path = self.auto_find_path() 
         self.raw_username = "admin"
         self.raw_password = ""
@@ -64,22 +70,27 @@ class OpenListManager(QWidget):
         local_alist = os.path.join(BASE_DIR, "alist.exe")
         if os.path.exists(local_alist): return os.path.normpath(local_alist)
         if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                p = f.read().strip().replace('"', '')
-                if os.path.isfile(p): return os.path.normpath(p)
+            try:
+                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                    p = f.read().strip().replace('"', '')
+                    if os.path.isfile(p): return os.path.normpath(p)
+            except: pass
         return ""
 
     def load_geometry(self):
         if os.path.exists(GEOMETRY_FILE):
             try:
                 with open(GEOMETRY_FILE, "r") as f:
-                    geo = json.load(f); self.move(geo.get("x", 100), geo.get("y", 100))
+                    geo = json.load(f)
+                    self.move(geo.get("x", 100), geo.get("y", 100))
+                    if "w" in geo and "h" in geo: self.resize(geo["w"], geo["h"])
             except: pass
 
     def save_geometry(self):
         try:
             with open(GEOMETRY_FILE, "w") as f:
-                json.dump({"x": self.pos().x(), "y": self.pos().y()}, f)
+                json.dump({"x": self.pos().x(), "y": self.pos().y(), "w": self.width(), "h": self.height()}, f)
+            hide_file(GEOMETRY_FILE)
         except: pass
 
     def load_author_info(self):
@@ -96,7 +107,7 @@ class OpenListManager(QWidget):
         painter.end(); self.lbl_avatar.setPixmap(target)
 
     def initUI(self):
-        self.setWindowTitle('OpenList Companion v2.1')
+        self.setWindowTitle('OpenList Companion v2.5')
         if os.path.exists(ICON_APP): self.setWindowIcon(QIcon(ICON_APP))
         self.setMinimumSize(1000, 800) 
         self.setStyleSheet("background-color: #F7F8FA; font-family: 'Microsoft YaHei UI';")
@@ -121,43 +132,48 @@ class OpenListManager(QWidget):
 
         content_hbox = QHBoxLayout(); content_hbox.setSpacing(0); main_v_layout.addLayout(content_hbox)
 
-        # --- 侧边栏 (固定宽度) ---
+        # 侧边栏
         sidebar = QFrame(); sidebar.setFixedWidth(320); sidebar.setStyleSheet("background-color: #FFFFFF; border: none;")
-        side_layout = QVBoxLayout(sidebar); side_layout.setContentsMargins(25, 40, 25, 40); side_layout.setSpacing(20)
+        side_layout = QVBoxLayout(sidebar); side_layout.setContentsMargins(25, 40, 25, 40); side_layout.setSpacing(18)
         
         profile_hbox = QHBoxLayout()
         self.lbl_avatar = QLabel(); self.lbl_avatar.setFixedSize(64, 64); self.lbl_avatar.setStyleSheet("background-color: #F1F3F5; border-radius: 32px;")
         self.lbl_title = QLabel(AUTHOR_DISPLAY_NAME); self.lbl_title.setFont(QFont("Microsoft YaHei UI", 18, QFont.Bold))
         profile_hbox.addWidget(self.lbl_avatar); profile_hbox.addSpacing(15); profile_hbox.addWidget(self.lbl_title); side_layout.addLayout(profile_hbox)
         
-        self.status_box = QFrame(); self.status_box.setFixedHeight(100); self.status_box.setStyleSheet("background-color: #F8F9FA; border-radius: 15px;")
-        status_layout = QVBoxLayout(self.status_box); self.lbl_status = QLabel("🔴 未运行"); self.lbl_status.setFont(QFont("Microsoft YaHei UI", 14, QFont.Bold))
-        self.lbl_address = QLabel(f"💻 http://127.0.0.1:{DEFAULT_PORT}"); status_layout.addWidget(self.lbl_status); status_layout.addWidget(self.lbl_address); side_layout.addWidget(self.status_box)
+        # --- 状态看板：彻底去掉内部边框和分割线 ---
+        self.status_box = QFrame(); self.status_box.setFixedHeight(100); self.status_box.setStyleSheet("background-color: #F8F9FA; border-radius: 15px; border: none;")
+        status_layout = QVBoxLayout(self.status_box); status_layout.setSpacing(5)
+        self.lbl_status = QLabel("🔴 未运行"); self.lbl_status.setFont(QFont("Microsoft YaHei UI", 14, QFont.Bold))
+        self.lbl_address = QLabel(f"💻 http://127.0.0.1:{DEFAULT_PORT}"); self.lbl_address.setStyleSheet("border: none;")
+        status_layout.addWidget(self.lbl_status); status_layout.addWidget(self.lbl_address); side_layout.addWidget(self.status_box)
 
-        self.cred_box = QFrame(); self.cred_box.setStyleSheet("background-color: #FFF4E6; border-radius: 15px;")
+        # 管理凭证
+        self.cred_box = QFrame(); self.cred_box.setStyleSheet("background-color: #FFF4E6; border-radius: 15px; border: none;")
         cred_layout = QVBoxLayout(self.cred_box); cred_header = QHBoxLayout(); cred_header.addWidget(QLabel("🔑 管理凭证", font=QFont("Microsoft YaHei UI", 10, QFont.Bold)))
         self.btn_get_admin = self.create_mini_btn("🔍 获取", "#FD7E14"); self.btn_get_admin.clicked.connect(self.get_admin_info)
         self.btn_set_admin = self.create_mini_btn("✍️ 修改", "#E67E22"); self.btn_set_admin.clicked.connect(self.set_admin_password)
         cred_header.addStretch(); cred_header.addWidget(self.btn_get_admin); cred_header.addWidget(self.btn_set_admin); cred_layout.addLayout(cred_header)
         self.lbl_admin_user = QLabel("用户: admin"); self.lbl_admin_pwd = QLabel("密码: ********"); cred_layout.addWidget(self.lbl_admin_user); cred_layout.addWidget(self.lbl_admin_pwd); side_layout.addWidget(self.cred_box)
 
-        self.help_box = QFrame(); self.help_box.setStyleSheet("background-color: #F3F0FF; border-radius: 15px;")
-        help_layout = QVBoxLayout(self.help_box); help_header = QHBoxLayout(); help_header.addWidget(QLabel("📚 使用帮助", font=QFont("Microsoft YaHei UI", 9, QFont.Bold)))
-        self.btn_view_help = self.create_mini_btn("🔗 查看", "#7950F2"); self.btn_view_help.clicked.connect(lambda: webbrowser.open(HELP_DOC_URL))
-        help_header.addStretch(); help_header.addWidget(self.btn_view_help); help_layout.addLayout(help_header); side_layout.addWidget(self.help_box)
-
-        # 【新增】GitHub 链接跳转板块
-        self.github_box = QFrame(); self.github_box.setStyleSheet("background-color: #E7F5FF; border-radius: 15px;")
+        # GitHub 跳转
+        self.github_box = QFrame(); self.github_box.setStyleSheet("background-color: #E7F5FF; border-radius: 15px; border: none;")
         github_layout = QVBoxLayout(self.github_box); github_header = QHBoxLayout(); github_header.addWidget(QLabel("🐙 开源主页", font=QFont("Microsoft YaHei UI", 9, QFont.Bold)))
         self.btn_view_github = self.create_mini_btn("🌐 访问", "#228BE6"); self.btn_view_github.clicked.connect(lambda: webbrowser.open(GITHUB_URL))
         github_header.addStretch(); github_header.addWidget(self.btn_view_github); github_layout.addLayout(github_header); side_layout.addWidget(self.github_box)
 
+        # 帮助文档
+        self.help_box = QFrame(); self.help_box.setStyleSheet("background-color: #F3F0FF; border-radius: 15px; border: none;")
+        help_layout = QVBoxLayout(self.help_box); help_header = QHBoxLayout(); help_header.addWidget(QLabel("📚 使用帮助", font=QFont("Microsoft YaHei UI", 9, QFont.Bold)))
+        self.btn_view_help = self.create_mini_btn("🔗 查看", "#7950F2"); self.btn_view_help.clicked.connect(lambda: webbrowser.open(HELP_DOC_URL))
+        help_header.addStretch(); help_header.addWidget(self.btn_view_help); help_layout.addLayout(help_header); side_layout.addWidget(self.help_box)
+
         side_layout.addStretch(); self.btn_reset_path = self.create_btn("⚙️ 重新设置路径", "#F1F3F5", "#495057", height=45); self.btn_reset_path.clicked.connect(self.change_path); side_layout.addWidget(self.btn_reset_path)
         content_hbox.addWidget(sidebar)
 
-        # --- 右侧控制区 (完全解决按钮变形) ---
-        right_scroll_area = QVBoxLayout(); right_scroll_area.setContentsMargins(40, 40, 40, 40); right_scroll_area.setSpacing(25)
-        ctrl_label = QLabel("服务控制中心"); ctrl_label.setFont(QFont("Microsoft YaHei UI", 14, QFont.Bold)); right_scroll_area.addWidget(ctrl_label)
+        # 右侧主控制区
+        right_area = QVBoxLayout(); right_area.setContentsMargins(40, 40, 40, 40); right_area.setSpacing(25)
+        ctrl_label = QLabel("服务控制中心"); ctrl_label.setFont(QFont("Microsoft YaHei UI", 14, QFont.Bold)); right_area.addWidget(ctrl_label)
         
         btn_grid_container = QHBoxLayout(); btn_grid_container.setSpacing(15)
         self.btn_start = self.create_btn("🚀 开启服务", "#4C6EF5", "#FFFFFF", width=150)
@@ -169,21 +185,21 @@ class OpenListManager(QWidget):
         self.btn_open_web = self.create_btn("🌐 管理后台", "#1098AD", "#FFFFFF", width=150)
         self.btn_open_web.clicked.connect(lambda: webbrowser.open(f"http://127.0.0.1:{DEFAULT_PORT}"))
         btn_grid_container.addWidget(self.btn_start); btn_grid_container.addWidget(self.btn_restart); btn_grid_container.addWidget(self.btn_stop); btn_grid_container.addWidget(self.btn_open_web); btn_grid_container.addStretch()
-        right_scroll_area.addLayout(btn_grid_container)
+        right_area.addLayout(btn_grid_container)
 
-        right_area_data_label = QLabel("数据维护"); right_area_data_label.setFont(QFont("Microsoft YaHei UI", 12, QFont.Bold)); right_scroll_area.addWidget(right_area_data_label)
+        right_area.addWidget(QLabel("数据维护", font=QFont("Microsoft YaHei UI", 12, QFont.Bold)))
         backup_hbox = QHBoxLayout(); backup_hbox.setSpacing(15)
         self.btn_export = self.create_btn("📦 导出全量备份", "#15AABF", "#FFFFFF", height=45, width=220)
         self.btn_export.clicked.connect(self.export_backup)
         self.btn_import = self.create_btn("📥 导入数据恢复", "#AE3EC9", "#FFFFFF", height=45, width=220)
         self.btn_import.clicked.connect(self.import_backup)
         backup_hbox.addWidget(self.btn_export); backup_hbox.addWidget(self.btn_import); backup_hbox.addStretch()
-        right_scroll_area.addLayout(backup_hbox)
+        right_area.addLayout(backup_hbox)
 
-        right_scroll_area.addWidget(QLabel("实时运行日志"))
+        right_area.addWidget(QLabel("实时运行日志"))
         self.log_box = QTextEdit(readOnly=True); self.log_box.setStyleSheet("background-color: #212529; color: #F8F9FA; border-radius: 15px; padding: 20px; font-family: 'Consolas'; border:none;")
-        right_scroll_area.addWidget(self.log_box)
-        content_hbox.addLayout(right_scroll_area, stretch=1)
+        right_area.addWidget(self.log_box)
+        content_hbox.addLayout(right_area, stretch=1)
 
     def initTray(self):
         self.tray_icon = QSystemTrayIcon(self)
@@ -197,7 +213,7 @@ class OpenListManager(QWidget):
 
     def create_btn(self, text, bg, fg, height=50, width=None):
         btn = QPushButton(text); btn.setMinimumHeight(height); btn.setCursor(Qt.PointingHandCursor)
-        if width: btn.setFixedWidth(width) # 强制锁定宽度，杜绝拉伸变形
+        if width: btn.setFixedWidth(width)
         btn.setStyleSheet(f"""
             QPushButton {{ background-color: {bg}; color: {fg}; border-radius: 12px; font-weight: bold; border: none; }}
             QPushButton:hover {{ filter: brightness(1.1); }}
@@ -214,17 +230,18 @@ class OpenListManager(QWidget):
         is_running = False
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.settimeout(0.2); is_running = (s.connect_ex(('127.0.0.1', DEFAULT_PORT)) == 0)
+                s.settimeout(0.1)
+                is_running = (s.connect_ex(('127.0.0.1', DEFAULT_PORT)) == 0)
         except: pass
         self.update_tray_icon(is_running)
         if is_running:
-            self.lbl_status.setText("🟢 正在运行"); self.lbl_status.setStyleSheet("color: white;")
-            self.status_box.setStyleSheet("background-color: #40C057; border-radius: 15px; border: 1px solid #2F9E44;")
-            self.lbl_address.setStyleSheet("color: #EBFBEE;"); self.btn_start.setEnabled(False)
+            self.lbl_status.setText("🟢 正在运行"); self.lbl_status.setStyleSheet("color: white; border: none;")
+            self.status_box.setStyleSheet("background-color: #40C057; border-radius: 15px; border: none;")
+            self.lbl_address.setStyleSheet("color: #EBFBEE; border: none;"); self.btn_start.setEnabled(False)
         else:
-            self.lbl_status.setText("🔴 未在运行"); self.lbl_status.setStyleSheet("color: #FA5252;")
-            self.status_box.setStyleSheet("background-color: #F8F9FA; border-radius: 15px;")
-            self.lbl_address.setStyleSheet("color: #868E96;"); self.btn_start.setEnabled(True)
+            self.lbl_status.setText("🔴 未在运行"); self.lbl_status.setStyleSheet("color: #FA5252; border: none;")
+            self.status_box.setStyleSheet("background-color: #F8F9FA; border-radius: 15px; border: none;")
+            self.lbl_address.setStyleSheet("color: #868E96; border: none;"); self.btn_start.setEnabled(True)
 
     def handle_incoming_log(self, msg):
         self.log(msg)
@@ -240,7 +257,7 @@ class OpenListManager(QWidget):
             self.log("🚀 拉起服务..."); self.thread = LogThread([self.app_path, "server", "--force-bin-dir"], os.path.dirname(self.app_path))
             self.thread.new_log.connect(self.handle_incoming_log); self.thread.start()
         elif action == "restart":
-            self.log("🔄 自动重启中..."); self.kill_all(); QTimer.singleShot(1000, lambda: self.run_command("start"))
+            self.log("🔄 重启联动..."); self.kill_all(); QTimer.singleShot(1000, lambda: self.run_command("start"))
 
     def kill_all(self):
         if not self.app_path: return
@@ -252,14 +269,14 @@ class OpenListManager(QWidget):
 
     def set_admin_password(self):
         if not self.app_path: return
-        pwd, ok = QInputDialog.getText(self, "修改密码", "输入新管理密码 (确定后将自动重启服务):", QLineEdit.Password)
+        pwd, ok = QInputDialog.getText(self, "修改密码", "输入新管理密码 (确定后将自动重启):", QLineEdit.Password)
         if ok and pwd:
             subprocess.Popen([self.app_path, "admin", "set", pwd], cwd=os.path.dirname(self.app_path), creationflags=0x08000000).wait()
-            self.raw_password = pwd; self.lbl_admin_pwd.setText(f"密码: {pwd}"); self.log("✅ 密码修改成功！自动重启服务..."); self.run_command("restart")
+            self.raw_password = pwd; self.lbl_admin_pwd.setText(f"密码: {pwd}"); self.log("✅ 密码已修改"); self.run_command("restart")
 
     def get_admin_info(self):
         if not self.app_path: return
-        self.log("🔍 正在提取当前凭证..."); self.kill_all(); time.sleep(1.5)
+        self.log("🔍 正在提取凭证..."); self.kill_all(); time.sleep(1.5)
         try:
             cmd = [self.app_path, "admin", "show"]
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=os.path.dirname(self.app_path), text=True, creationflags=0x08000000)
@@ -280,19 +297,25 @@ class OpenListManager(QWidget):
     def import_backup(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "选择恢复文件", "", "Zip (*.zip)")
         if file_path:
-            self.log("📦 正在恢复数据..."); self.kill_all(); time.sleep(1.5)
+            self.log("📦 恢复数据..."); self.kill_all(); time.sleep(1.5)
             try:
                 with zipfile.ZipFile(file_path, 'r') as z: z.extractall(os.path.dirname(self.app_path))
-                self.log("✅ 恢复成功！自动重启..."); QTimer.singleShot(500, lambda: self.run_command("start"))
+                self.log("✅ 恢复成功！"); QTimer.singleShot(500, lambda: self.run_command("start"))
             except Exception as e: self.log(f"❌ 恢复失败: {e}"); self.run_command("start")
 
     def log(self, msg, color="#63E6BE"): self.log_box.append(f"<span style='color:{color};'>[{time.strftime('%H:%M:%S')}]</span> {msg}")
+    
     def change_path(self):
         p, _ = QFileDialog.getOpenFileName(self, "定位 alist.exe", "", "EXE (*.exe)")
-        if p: self.app_path = os.path.normpath(p); open(CONFIG_FILE, "w", encoding="utf-8").write(p); self.log("⚙️ 路径更新成功")
+        if p: 
+            self.app_path = os.path.normpath(p)
+            with open(CONFIG_FILE, "w", encoding="utf-8") as f: f.write(p)
+            hide_file(CONFIG_FILE)
+            self.log("⚙️ 路径更新成功")
+
     def quick_copy(self, mode):
         content = self.raw_username if mode == "user" else self.raw_password
-        QApplication.clipboard().setText(content); self.log(f"📋 {'账号' if mode=='user' else '密码'}已手动复制")
+        QApplication.clipboard().setText(content); self.log(f"📋 已手动复制")
     def force_quit(self): self.save_geometry(); self.tray_icon.hide(); QApplication.quit()
     def closeEvent(self, event): self.save_geometry(); self.hide(); event.ignore()
 
