@@ -23,6 +23,7 @@ GEOMETRY_FILE = ".openlist_geo"
 DEFAULT_PORT = 5244
 BILIBILI_UID = "3493268808620216"
 BILIBILI_SPACE_URL = "https://b23.tv/O23eqKi"
+GITHUB_URL = "https://github.com/guguli685-boop/OpenList-Companion/tree/main"
 HELP_DOC_URL = "https://gemini.google.com/app/6a8d06b29e498881"
 AUTHOR_DISPLAY_NAME = "余宣灵."
 
@@ -95,7 +96,7 @@ class OpenListManager(QWidget):
         painter.end(); self.lbl_avatar.setPixmap(target)
 
     def initUI(self):
-        self.setWindowTitle('OpenList Companion v2.0')
+        self.setWindowTitle('OpenList Companion v2.1')
         if os.path.exists(ICON_APP): self.setWindowIcon(QIcon(ICON_APP))
         self.setMinimumSize(1000, 800) 
         self.setStyleSheet("background-color: #F7F8FA; font-family: 'Microsoft YaHei UI';")
@@ -145,16 +146,19 @@ class OpenListManager(QWidget):
         self.btn_view_help = self.create_mini_btn("🔗 查看", "#7950F2"); self.btn_view_help.clicked.connect(lambda: webbrowser.open(HELP_DOC_URL))
         help_header.addStretch(); help_header.addWidget(self.btn_view_help); help_layout.addLayout(help_header); side_layout.addWidget(self.help_box)
 
+        # 【新增】GitHub 链接跳转板块
+        self.github_box = QFrame(); self.github_box.setStyleSheet("background-color: #E7F5FF; border-radius: 15px;")
+        github_layout = QVBoxLayout(self.github_box); github_header = QHBoxLayout(); github_header.addWidget(QLabel("🐙 开源主页", font=QFont("Microsoft YaHei UI", 9, QFont.Bold)))
+        self.btn_view_github = self.create_mini_btn("🌐 访问", "#228BE6"); self.btn_view_github.clicked.connect(lambda: webbrowser.open(GITHUB_URL))
+        github_header.addStretch(); github_header.addWidget(self.btn_view_github); github_layout.addLayout(github_header); side_layout.addWidget(self.github_box)
+
         side_layout.addStretch(); self.btn_reset_path = self.create_btn("⚙️ 重新设置路径", "#F1F3F5", "#495057", height=45); self.btn_reset_path.clicked.connect(self.change_path); side_layout.addWidget(self.btn_reset_path)
         content_hbox.addWidget(sidebar)
 
-        # --- 右侧主控制区 (自适应修复) ---
+        # --- 右侧控制区 (完全解决按钮变形) ---
         right_scroll_area = QVBoxLayout(); right_scroll_area.setContentsMargins(40, 40, 40, 40); right_scroll_area.setSpacing(25)
-        
-        # 服务控制中心板块
         ctrl_label = QLabel("服务控制中心"); ctrl_label.setFont(QFont("Microsoft YaHei UI", 14, QFont.Bold)); right_scroll_area.addWidget(ctrl_label)
         
-        # 按钮容器：使用 QHBoxLayout 并加入 Stretch，防止按钮被拉宽变形
         btn_grid_container = QHBoxLayout(); btn_grid_container.setSpacing(15)
         self.btn_start = self.create_btn("🚀 开启服务", "#4C6EF5", "#FFFFFF", width=150)
         self.btn_start.clicked.connect(lambda: self.run_command("start"))
@@ -164,12 +168,9 @@ class OpenListManager(QWidget):
         self.btn_stop.clicked.connect(lambda: self.run_command("stop"))
         self.btn_open_web = self.create_btn("🌐 管理后台", "#1098AD", "#FFFFFF", width=150)
         self.btn_open_web.clicked.connect(lambda: webbrowser.open(f"http://127.0.0.1:{DEFAULT_PORT}"))
-        
-        btn_grid_container.addWidget(self.btn_start); btn_grid_container.addWidget(self.btn_restart); btn_grid_container.addWidget(self.btn_stop); btn_grid_container.addWidget(self.btn_open_web)
-        btn_grid_container.addStretch() # 这个 Stretch 是关键，它会吃掉多余空间，防止按钮变宽
+        btn_grid_container.addWidget(self.btn_start); btn_grid_container.addWidget(self.btn_restart); btn_grid_container.addWidget(self.btn_stop); btn_grid_container.addWidget(self.btn_open_web); btn_grid_container.addStretch()
         right_scroll_area.addLayout(btn_grid_container)
 
-        # 数据维护板块
         right_area_data_label = QLabel("数据维护"); right_area_data_label.setFont(QFont("Microsoft YaHei UI", 12, QFont.Bold)); right_scroll_area.addWidget(right_area_data_label)
         backup_hbox = QHBoxLayout(); backup_hbox.setSpacing(15)
         self.btn_export = self.create_btn("📦 导出全量备份", "#15AABF", "#FFFFFF", height=45, width=220)
@@ -182,7 +183,6 @@ class OpenListManager(QWidget):
         right_scroll_area.addWidget(QLabel("实时运行日志"))
         self.log_box = QTextEdit(readOnly=True); self.log_box.setStyleSheet("background-color: #212529; color: #F8F9FA; border-radius: 15px; padding: 20px; font-family: 'Consolas'; border:none;")
         right_scroll_area.addWidget(self.log_box)
-        
         content_hbox.addLayout(right_scroll_area, stretch=1)
 
     def initTray(self):
@@ -197,8 +197,7 @@ class OpenListManager(QWidget):
 
     def create_btn(self, text, bg, fg, height=50, width=None):
         btn = QPushButton(text); btn.setMinimumHeight(height); btn.setCursor(Qt.PointingHandCursor)
-        if width:
-            btn.setFixedWidth(width) # 【核心修复】锁定按钮宽度，防止变形
+        if width: btn.setFixedWidth(width) # 强制锁定宽度，杜绝拉伸变形
         btn.setStyleSheet(f"""
             QPushButton {{ background-color: {bg}; color: {fg}; border-radius: 12px; font-weight: bold; border: none; }}
             QPushButton:hover {{ filter: brightness(1.1); }}
@@ -220,7 +219,7 @@ class OpenListManager(QWidget):
         self.update_tray_icon(is_running)
         if is_running:
             self.lbl_status.setText("🟢 正在运行"); self.lbl_status.setStyleSheet("color: white;")
-            self.status_box.setStyleSheet("background-color: #40C057; border-radius: 15px;")
+            self.status_box.setStyleSheet("background-color: #40C057; border-radius: 15px; border: 1px solid #2F9E44;")
             self.lbl_address.setStyleSheet("color: #EBFBEE;"); self.btn_start.setEnabled(False)
         else:
             self.lbl_status.setText("🔴 未在运行"); self.lbl_status.setStyleSheet("color: #FA5252;")
@@ -241,7 +240,7 @@ class OpenListManager(QWidget):
             self.log("🚀 拉起服务..."); self.thread = LogThread([self.app_path, "server", "--force-bin-dir"], os.path.dirname(self.app_path))
             self.thread.new_log.connect(self.handle_incoming_log); self.thread.start()
         elif action == "restart":
-            self.log("🔄 重启中..."); self.kill_all(); QTimer.singleShot(1000, lambda: self.run_command("start"))
+            self.log("🔄 自动重启中..."); self.kill_all(); QTimer.singleShot(1000, lambda: self.run_command("start"))
 
     def kill_all(self):
         if not self.app_path: return
@@ -256,11 +255,11 @@ class OpenListManager(QWidget):
         pwd, ok = QInputDialog.getText(self, "修改密码", "输入新管理密码 (确定后将自动重启服务):", QLineEdit.Password)
         if ok and pwd:
             subprocess.Popen([self.app_path, "admin", "set", pwd], cwd=os.path.dirname(self.app_path), creationflags=0x08000000).wait()
-            self.raw_password = pwd; self.lbl_admin_pwd.setText(f"密码: {pwd}"); self.log("✅ 密码已修改"); self.run_command("restart")
+            self.raw_password = pwd; self.lbl_admin_pwd.setText(f"密码: {pwd}"); self.log("✅ 密码修改成功！自动重启服务..."); self.run_command("restart")
 
     def get_admin_info(self):
         if not self.app_path: return
-        self.log("🔍 正在提取凭证..."); self.kill_all(); time.sleep(1.5)
+        self.log("🔍 正在提取当前凭证..."); self.kill_all(); time.sleep(1.5)
         try:
             cmd = [self.app_path, "admin", "show"]
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=os.path.dirname(self.app_path), text=True, creationflags=0x08000000)
